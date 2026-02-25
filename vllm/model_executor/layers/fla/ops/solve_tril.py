@@ -20,6 +20,7 @@ from .utils import (
     get_num_stages_for_amd,
     get_num_warps_for_amd,
     input_guard,
+    is_amd,
     is_tma_supported,
     use_amd_fla_tuning,
 )

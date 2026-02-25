@@ -165,6 +165,7 @@ is_amd_cdna4 = is_amd and any(x in _amd_device_name for x in ["MI350X", "MI355X"
 # Environment variable to enable/disable AMD-specific FLA tuning
 # Controlled by VLLM_ROCM_USE_FLA_TUNING (default: True on AMD GPUs)
 use_amd_fla_tuning = is_amd and envs.VLLM_ROCM_USE_FLA_TUNING
+
 is_gather_supported = hasattr(triton.language, "gather")
 is_tma_supported = (is_nvidia and torch.cuda.get_device_capability(0)[0] >= 9) and (
     hasattr(triton.language, "_experimental_make_tensor_descriptor")
