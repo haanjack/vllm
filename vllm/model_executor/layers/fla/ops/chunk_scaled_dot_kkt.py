@@ -14,6 +14,23 @@ from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
 from .op import exp
+from .utils import (
+    get_block_sizes_for_amd,
+    get_num_stages_for_amd,
+    get_num_warps_for_amd,
+    is_amd,
+)
+
+# AMD CDNA uses wavefront64 (64 threads/warp) vs NVIDIA's 32
+# AMD also has different LDS sizes: CDNA4 160KB, CDNA3 64KB
+if is_amd:
+    BK_LIST = get_block_sizes_for_amd()
+    NUM_WARPS = get_num_warps_for_amd()
+    NUM_STAGES = get_num_stages_for_amd()
+else:
+    BK_LIST = [32, 64, 128]
+    NUM_WARPS = [2, 4, 8]
+    NUM_STAGES = [2, 3, 4]
 
 
 @triton.heuristics(
@@ -25,9 +42,9 @@ from .op import exp
 @triton.autotune(
     configs=[
         triton.Config({"BK": BK}, num_warps=num_warps, num_stages=num_stages)
-        for BK in [32, 64, 128]
-        for num_warps in [2, 4, 8]
-        for num_stages in [2, 3, 4]
+        for BK in BK_LIST
+        for num_warps in NUM_WARPS
+        for num_stages in NUM_STAGES
     ],
     key=["H", "K", "BT", "IS_VARLEN"],
 )

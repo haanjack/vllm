@@ -14,14 +14,23 @@ import torch
 from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
+from .utils import get_num_stages_for_amd, get_num_warps_for_amd, is_amd
+
+# AMD CDNA uses wavefront64 (64 threads/warp) vs NVIDIA's 32
+if is_amd:
+    NUM_WARPS = get_num_warps_for_amd()
+    NUM_STAGES = get_num_stages_for_amd()
+else:
+    NUM_WARPS = [2, 4, 8]
+    NUM_STAGES = [2, 3, 4]
 
 
 @triton.heuristics({"IS_VARLEN": lambda args: args["cu_seqlens"] is not None})
 @triton.autotune(
     configs=[
         triton.Config({}, num_warps=num_warps, num_stages=num_stages)
-        for num_warps in [2, 4, 8]
-        for num_stages in [2, 3, 4]
+        for num_warps in NUM_WARPS
+        for num_stages in NUM_STAGES
     ],
     key=["H", "K", "V", "BT", "BK", "BV", "IS_VARLEN"],
 )

@@ -14,14 +14,31 @@ import torch
 from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
-from .utils import check_shared_mem, input_guard
+from .utils import (
+    check_shared_mem,
+    get_block_sizes_for_amd,
+    get_num_warps_for_amd,
+    input_guard,
+    is_amd,
+)
 
-BS_LIST = [32, 64] if check_shared_mem() else [16, 32]
+# Block sizes depend on available LDS (shared memory)
+# CDNA4 (MI350X/MI355X): 160KB LDS allows larger blocks
+# CDNA3 (MI300X/MI325X): 64KB LDS, more conservative
+if is_amd:
+    BS_LIST = get_block_sizes_for_amd()
+    NUM_WARPS = get_num_warps_for_amd()
+elif check_shared_mem():
+    BS_LIST = [32, 64]
+    NUM_WARPS = [1, 2, 4, 8]
+else:
+    BS_LIST = [16, 32]
+    NUM_WARPS = [1, 2, 4, 8]
 
 
 @triton.heuristics({"IS_VARLEN": lambda args: args["cu_seqlens"] is not None})
 @triton.autotune(
-    configs=[triton.Config({}, num_warps=num_warps) for num_warps in [1, 2, 4, 8]],
+    configs=[triton.Config({}, num_warps=num_warps) for num_warps in NUM_WARPS],
     key=["B", "H", "BT", "IS_VARLEN", "REVERSE"],
 )
 @triton.jit(do_not_specialize=["T"])
@@ -77,7 +94,7 @@ def chunk_local_cumsum_scalar_kernel(
     configs=[
         triton.Config({"BS": BS}, num_warps=num_warps)
         for BS in BS_LIST
-        for num_warps in [2, 4, 8]
+        for num_warps in NUM_WARPS
     ],
     key=["B", "H", "S", "BT", "IS_VARLEN", "REVERSE"],
 )

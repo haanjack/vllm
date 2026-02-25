@@ -14,9 +14,21 @@ from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices, prepare_chunk_offsets
 from .op import exp
-from .utils import use_cuda_graph
+from .utils import (
+    get_num_stages_for_amd,
+    get_num_warps_for_amd,
+    is_amd,
+    use_cuda_graph,
+)
 
-NUM_WARPS = [2, 4, 8, 16]
+# AMD CDNA uses wavefront64 (64 threads/warp) vs NVIDIA's 32
+# AMD also has max 40 warps/XCD, so we tune differently
+if is_amd:
+    NUM_WARPS = get_num_warps_for_amd()
+    NUM_STAGES = get_num_stages_for_amd()
+else:
+    NUM_WARPS = [2, 4, 8, 16]
+    NUM_STAGES = [2, 3, 4]
 
 
 @triton.heuristics(
@@ -32,8 +44,8 @@ NUM_WARPS = [2, 4, 8, 16]
 @triton.autotune(
     configs=[
         triton.Config({"BV": BV}, num_warps=num_warps, num_stages=num_stages)
-        for num_warps in [2, 4]
-        for num_stages in [2, 3, 4]
+        for num_warps in NUM_WARPS
+        for num_stages in NUM_STAGES
         for BV in [32, 64]
     ],
     key=["H", "K", "V", "BT"],

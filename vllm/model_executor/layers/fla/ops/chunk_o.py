@@ -16,10 +16,32 @@ from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
 from .op import exp
-from .utils import FLA_GDN_FIX_BT, check_shared_mem, is_nvidia_hopper
+from .utils import (
+    FLA_GDN_FIX_BT,
+    check_shared_mem,
+    get_block_sizes_for_amd,
+    get_num_stages_for_amd,
+    get_num_warps_for_amd,
+    is_amd,
+    is_amd_cdna4,
+    is_nvidia_hopper,
+)
 
-BKV_LIST = [64, 128] if check_shared_mem() else [32, 64]
-NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
+# Block sizes depend on available LDS (shared memory)
+# CDNA4 (MI350X/MI355X): 160KB LDS allows larger blocks
+# CDNA3 (MI300X/MI325X): 64KB LDS, more conservative
+if is_amd:
+    BKV_LIST = get_block_sizes_for_amd()
+    NUM_WARPS = get_num_warps_for_amd()
+    NUM_STAGES = get_num_stages_for_amd()
+elif check_shared_mem():
+    BKV_LIST = [64, 128]
+    NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
+    NUM_STAGES = [2, 3, 4]
+else:
+    BKV_LIST = [32, 64]
+    NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
+    NUM_STAGES = [2, 3, 4]
 
 
 @triton.heuristics(
@@ -34,7 +56,7 @@ NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
         for BK in BKV_LIST
         for BV in BKV_LIST
         for num_warps in NUM_WARPS
-        for num_stages in [2, 3, 4]
+        for num_stages in NUM_STAGES
     ],
     key=["H", "K", "V", "BT"],
 )

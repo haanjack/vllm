@@ -16,7 +16,22 @@ from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
 from .op import make_tensor_descriptor
-from .utils import input_guard, is_amd, is_tma_supported
+from .utils import (
+    get_num_stages_for_amd,
+    get_num_warps_for_amd,
+    input_guard,
+    is_amd,
+    is_tma_supported,
+)
+
+# AMD CDNA uses wavefront64 (64 threads/warp) vs NVIDIA's 32
+# Tuning parameters optimized for different architectures
+if is_amd:
+    NUM_WARPS = get_num_warps_for_amd()
+    NUM_STAGES = get_num_stages_for_amd()
+else:
+    NUM_WARPS = [1, 2, 4, 8]
+    NUM_STAGES = [2, 3, 4, 5]
 
 FLA_TRIL_PRECISION = os.environ.get("FLA_TRIL_PRECISION", "ieee")
 ALLOWED_TRIL_PRECISIONS = ["ieee", "tf32"] if is_amd else ["ieee", "tf32", "tf32x3"]
@@ -29,8 +44,8 @@ assert FLA_TRIL_PRECISION in ALLOWED_TRIL_PRECISIONS, (
 @triton.autotune(
     configs=[
         triton.Config({}, num_warps=num_warps, num_stages=num_stages)
-        for num_warps in [1, 2, 4, 8]
-        for num_stages in [2, 3, 4, 5]
+        for num_warps in NUM_WARPS
+        for num_stages in NUM_STAGES
     ],
     key=["BT"],
 )
@@ -104,8 +119,8 @@ def solve_tril_16x16_kernel(
 @triton.autotune(
     configs=[
         triton.Config({}, num_warps=num_warps, num_stages=num_stages)
-        for num_warps in [1, 2, 4, 8]
-        for num_stages in [2, 3, 4, 5]
+        for num_warps in NUM_WARPS
+        for num_stages in NUM_STAGES
     ],
     key=["H", "BT", "IS_VARLEN"],
 )
@@ -229,8 +244,8 @@ def merge_16x16_to_32x32_inverse_kernel(
 @triton.autotune(
     configs=[
         triton.Config({}, num_warps=num_warps, num_stages=num_stages)
-        for num_warps in [2, 4, 8]
-        for num_stages in [2, 3, 4, 5]
+        for num_warps in NUM_WARPS
+        for num_stages in NUM_STAGES
     ],
     key=["H", "BT", "IS_VARLEN"],
 )

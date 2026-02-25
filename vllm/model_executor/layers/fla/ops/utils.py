@@ -151,6 +151,15 @@ is_nvidia_hopper = is_nvidia and (
     or torch.cuda.get_device_capability()[0] >= 9
 )
 use_cuda_graph = is_nvidia and os.environ.get("FLA_USE_CUDA_GRAPH", "0") == "1"
+
+# AMD GPU architecture detection
+# CDNA3: MI300X, MI325X - 64KB LDS, wavefront64, max 40 warps/XCD
+# CDNA4: MI350X, MI355X - 160KB LDS, wavefront64, max 40 warps/XCD
+_amd_device_name = torch.cuda.get_device_name(0) if is_amd else ""
+is_amd_cdna3 = is_amd and any(
+    x in _amd_device_name for x in ["MI300X", "MI325X", "MI300A"]
+)
+is_amd_cdna4 = is_amd and any(x in _amd_device_name for x in ["MI350X", "MI355X"])
 is_gather_supported = hasattr(triton.language, "gather")
 is_tma_supported = (is_nvidia and torch.cuda.get_device_capability(0)[0] >= 9) and (
     hasattr(triton.language, "_experimental_make_tensor_descriptor")
@@ -171,10 +180,23 @@ def get_all_max_shared_mem():
 
 
 class Backend(Enum):
+    # NVIDIA GPUs
     ADA = 101376  # RTX 4090
     AMPERE = 166912  # A100
     HOPPER = 232448  # H100
-    DEFAULT = 102400  # Default
+    # AMD GPUs - CDNA3 (MI300X, MI325X): 64KB LDS per workgroup
+    # wavefront size: 64, max 40 warps per XCD
+    CDNA3 = 65536
+    MI300X = 65536
+    MI325X = 65536
+    MI300A = 65536
+    # AMD GPUs - CDNA4 (MI350X, MI355X): 160KB LDS per workgroup
+    # wavefront size: 64, max 40 warps per XCD
+    CDNA4 = 163840
+    MI350X = 163840
+    MI355X = 163840
+    # Default fallback
+    DEFAULT = 102400
 
     @classmethod
     def get_shared_memory(cls, arch: str) -> int:
@@ -192,3 +214,80 @@ def check_shared_mem(arch: str = "none", tensor_idx: int = 0) -> bool:
         return max_shared_memory >= Backend.get_shared_memory(arch)
     except Exception:
         return False
+
+
+def get_amd_arch_name() -> str:
+    """
+    Get the AMD architecture name for the current device.
+
+    Returns:
+        str: Architecture name ('CDNA4', 'CDNA3', or 'UNKNOWN')
+    """
+    if is_amd_cdna4:
+        return "CDNA4"
+    elif is_amd_cdna3:
+        return "CDNA3"
+    return "UNKNOWN"
+
+
+def get_amd_lds_size() -> int:
+    """
+    Get the LDS (Local Data Share) size in bytes for the current AMD GPU.
+
+    Returns:
+        int: LDS size in bytes (160KB for CDNA4, 64KB for CDNA3, 64KB default)
+    """
+    if is_amd_cdna4:
+        return Backend.CDNA4.value  # 160KB
+    elif is_amd_cdna3:
+        return Backend.CDNA3.value  # 64KB
+    return 65536  # Default 64KB
+
+
+def get_num_warps_for_amd() -> list[int]:
+    """
+    Get recommended num_warps values for AMD GPU auto-tuning.
+
+    AMD CDNA architecture uses wavefront64 (64 threads per warp vs 32 on NVIDIA).
+    Max 40 warps per XCD on MI300X/MI325X/MI350X/MI355X.
+
+    For effective occupancy, we use lower warp counts compared to NVIDIA
+    since each AMD warp processes twice as many threads.
+
+    Returns:
+        list[int]: List of num_warps values for auto-tuning
+    """
+    # AMD wavefront64 means fewer warps needed for same thread count
+    # Max 40 warps/XCD, but practical limits are lower for register pressure
+    return [4, 8, 16, 32]
+
+
+def get_num_stages_for_amd() -> list[int]:
+    """
+    Get recommended num_stages values for AMD GPU auto-tuning.
+
+    AMD GPUs have different memory hierarchy and prefetch behavior
+    than NVIDIA GPUs. Fewer stages often work better.
+
+    Returns:
+        list[int]: List of num_stages values for auto-tuning
+    """
+    return [1, 2, 3]
+
+
+def get_block_sizes_for_amd() -> list[int]:
+    """
+    Get recommended block sizes for AMD GPU auto-tuning.
+
+    CDNA4 (160KB LDS) can support larger blocks than CDNA3 (64KB LDS).
+
+    Returns:
+        list[int]: List of block sizes for auto-tuning
+    """
+    if is_amd_cdna4:
+        # 160KB LDS allows larger blocks
+        return [64, 128, 192]
+    elif is_amd_cdna3:
+        # 64KB LDS, more conservative
+        return [32, 64, 128]
+    return [32, 64]  # Default

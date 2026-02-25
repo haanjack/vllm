@@ -13,6 +13,7 @@ import torch
 from vllm.triton_utils import tl, triton
 
 from .op import exp
+from .utils import is_amd
 
 
 @triton.heuristics(
@@ -195,8 +196,15 @@ def fused_recurrent_gated_delta_rule_fwd(
     BK, BV = triton.next_power_of_2(K), min(triton.next_power_of_2(V), 32)
     NK, NV = triton.cdiv(K, BK), triton.cdiv(V, BV)
     assert NK == 1, "NK > 1 is not supported yet"
-    num_stages = 3
-    num_warps = 1
+    # AMD CDNA uses wavefront64, so we may benefit from slightly different
+    # warp/stage configurations. For decode (recurrent), we keep it simple.
+    if is_amd:
+        # AMD prefers fewer stages due to different prefetch behavior
+        num_stages = 2
+        num_warps = 1
+    else:
+        num_stages = 3
+        num_warps = 1
 
     o = q.new_empty(NK, *v.shape)
     if inplace_final_state:
