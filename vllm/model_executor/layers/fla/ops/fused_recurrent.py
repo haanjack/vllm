@@ -13,7 +13,7 @@ import torch
 from vllm.triton_utils import tl, triton
 
 from .op import exp
-from .utils import use_amd_fla_tuning
+from .utils import is_amd
 
 
 @triton.heuristics(
@@ -198,8 +198,7 @@ def fused_recurrent_gated_delta_rule_fwd(
     assert NK == 1, "NK > 1 is not supported yet"
     # AMD CDNA uses wavefront64, so we may benefit from slightly different
     # warp/stage configurations. For decode (recurrent), we keep it simple.
-    # Controlled by VLLM_ROCM_USE_FLA_TUNING environment variable
-    if use_amd_fla_tuning:
+    if is_amd:
         # AMD prefers fewer stages due to different prefetch behavior
         num_stages = 2
         num_warps = 1

@@ -17,14 +17,13 @@ from .op import exp
 from .utils import (
     get_num_stages_for_amd,
     get_num_warps_for_amd,
-    use_amd_fla_tuning,
+    is_amd,
     use_cuda_graph,
 )
 
 # AMD CDNA uses wavefront64 (64 threads/warp) vs NVIDIA's 32
 # AMD also has max 40 warps/XCD, so we tune differently
-# Controlled by VLLM_ROCM_USE_FLA_TUNING environment variable
-if use_amd_fla_tuning:
+if is_amd:
     NUM_WARPS = get_num_warps_for_amd()
     NUM_STAGES = get_num_stages_for_amd()
 else:

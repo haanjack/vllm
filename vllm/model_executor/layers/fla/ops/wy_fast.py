@@ -14,11 +14,10 @@ import torch
 from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
-from .utils import get_num_stages_for_amd, get_num_warps_for_amd, use_amd_fla_tuning
+from .utils import get_num_stages_for_amd, get_num_warps_for_amd, is_amd
 
 # AMD CDNA uses wavefront64 (64 threads/warp) vs NVIDIA's 32
-# Controlled by VLLM_ROCM_USE_FLA_TUNING environment variable
-if use_amd_fla_tuning:
+if is_amd:
     NUM_WARPS = get_num_warps_for_amd()
     NUM_STAGES = get_num_stages_for_amd()
 else:

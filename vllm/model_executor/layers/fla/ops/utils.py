@@ -161,11 +161,6 @@ is_amd_cdna3 = is_amd and any(
     x in _amd_device_name for x in ["MI300X", "MI325X", "MI300A"]
 )
 is_amd_cdna4 = is_amd and any(x in _amd_device_name for x in ["MI350X", "MI355X"])
-
-# Environment variable to enable/disable AMD-specific FLA tuning
-# Controlled by VLLM_ROCM_USE_FLA_TUNING (default: True on AMD GPUs)
-use_amd_fla_tuning = is_amd and envs.VLLM_ROCM_USE_FLA_TUNING
-
 is_gather_supported = hasattr(triton.language, "gather")
 is_tma_supported = (is_nvidia and torch.cuda.get_device_capability(0)[0] >= 9) and (
     hasattr(triton.language, "_experimental_make_tensor_descriptor")
@@ -260,14 +255,9 @@ def get_num_warps_for_amd() -> list[int]:
     For effective occupancy, we use lower warp counts compared to NVIDIA
     since each AMD warp processes twice as many threads.
 
-    Controlled by VLLM_ROCM_USE_FLA_TUNING environment variable.
-
     Returns:
         list[int]: List of num_warps values for auto-tuning
     """
-    if not use_amd_fla_tuning:
-        # Fall back to default values when AMD FLA tuning is disabled
-        return [2, 4, 8]
     # AMD wavefront64 means fewer warps needed for same thread count
     # Max 40 warps/XCD, but practical limits are lower for register pressure
     return [4, 8, 16, 32]
@@ -280,14 +270,9 @@ def get_num_stages_for_amd() -> list[int]:
     AMD GPUs have different memory hierarchy and prefetch behavior
     than NVIDIA GPUs. Fewer stages often work better.
 
-    Controlled by VLLM_ROCM_USE_FLA_TUNING environment variable.
-
     Returns:
         list[int]: List of num_stages values for auto-tuning
     """
-    if not use_amd_fla_tuning:
-        # Fall back to default values when AMD FLA tuning is disabled
-        return [2, 3, 4]
     return [1, 2, 3]
 
 
@@ -297,14 +282,9 @@ def get_block_sizes_for_amd() -> list[int]:
 
     CDNA4 (160KB LDS) can support larger blocks than CDNA3 (64KB LDS).
 
-    Controlled by VLLM_ROCM_USE_FLA_TUNING environment variable.
-
     Returns:
         list[int]: List of block sizes for auto-tuning
     """
-    if not use_amd_fla_tuning:
-        # Fall back to default values when AMD FLA tuning is disabled
-        return [32, 64]
     if is_amd_cdna4:
         # 160KB LDS allows larger blocks
         return [64, 128, 192]
