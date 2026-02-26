@@ -22,11 +22,12 @@ from .utils import (
     input_guard,
     is_amd,
     is_tma_supported,
+    use_fla_tuning,
 )
 
 # AMD CDNA uses wavefront64 (64 threads/warp) vs NVIDIA's 32
 # Tuning parameters optimized for different architectures
-if is_amd:
+if use_fla_tuning:
     NUM_WARPS = get_num_warps_for_amd()
     NUM_STAGES = get_num_stages_for_amd()
 else:

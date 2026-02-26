@@ -19,13 +19,13 @@ from .utils import (
     get_block_sizes_for_amd,
     get_num_warps_for_amd,
     input_guard,
-    is_amd,
+    use_fla_tuning,
 )
 
 # Block sizes depend on available LDS (shared memory)
 # CDNA4 (MI350X/MI355X): 160KB LDS allows larger blocks
 # CDNA3 (MI300X/MI325X): 64KB LDS, more conservative
-if is_amd:
+if use_fla_tuning:
     BS_LIST = get_block_sizes_for_amd()
     NUM_WARPS = get_num_warps_for_amd()
 elif check_shared_mem():

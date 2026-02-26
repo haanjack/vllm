@@ -18,12 +18,12 @@ from .utils import (
     get_block_sizes_for_amd,
     get_num_stages_for_amd,
     get_num_warps_for_amd,
-    is_amd,
+    use_fla_tuning,
 )
 
 # AMD CDNA uses wavefront64 (64 threads/warp) vs NVIDIA's 32
 # AMD also has different LDS sizes: CDNA4 160KB, CDNA3 64KB
-if is_amd:
+if use_fla_tuning:
     BK_LIST = get_block_sizes_for_amd()
     NUM_WARPS = get_num_warps_for_amd()
     NUM_STAGES = get_num_stages_for_amd()

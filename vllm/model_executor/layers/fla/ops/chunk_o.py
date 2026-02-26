@@ -22,15 +22,15 @@ from .utils import (
     get_block_sizes_for_amd,
     get_num_stages_for_amd,
     get_num_warps_for_amd,
-    is_amd,
     is_amd_cdna4,
     is_nvidia_hopper,
+    use_fla_tuning,
 )
 
 # Block sizes depend on available LDS (shared memory)
 # CDNA4 (MI350X/MI355X): 160KB LDS allows larger blocks
 # CDNA3 (MI300X/MI325X): 64KB LDS, more conservative
-if is_amd:
+if use_fla_tuning:
     BKV_LIST = get_block_sizes_for_amd()
     NUM_WARPS = get_num_warps_for_amd()
     NUM_STAGES = get_num_stages_for_amd()
