@@ -273,10 +273,12 @@ class Param2MoE(nn.Module):
 
         if self.num_shared_experts > 0:
             if hasattr(config, "moe_shared_expert_intermediate_size"):
+                # moe_shared_expert_intermediate_size is already the total size
+                # for all shared experts combined
                 intermediate_size = config.moe_shared_expert_intermediate_size
             else:
-                intermediate_size = config.moe_intermediate_size
-            intermediate_size *= config.num_shared_experts
+                # Fall back to moe_intermediate_size and multiply by num_shared_experts
+                intermediate_size = config.moe_intermediate_size * config.num_shared_experts
             self.shared_experts = Param2MLP(
                 intermediate_size=intermediate_size,
                 config=config,
@@ -496,6 +498,7 @@ class Param2MoeModel(nn.Module):
         params_dict = dict(self.named_parameters(remove_duplicate=False))
         loaded_params: set[str] = set()
         expert_params_mapping = self.get_expert_mapping()
+
         for name, loaded_weight in weights:
             if (
                 hasattr(self.config, "norm_head")
